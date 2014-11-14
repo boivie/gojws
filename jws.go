@@ -84,13 +84,22 @@ func (sk singleKey) GetJWSKey(h Header) (crypto.PublicKey, error) {
 	return sk.key, nil
 }
 
+type Jwk struct {
+	KeyType string `json:"kty"`
+	N       string `json:"n"`
+	E       string `json:"e"`
+	Curve   string `json:"crv"`
+	X       string `json:"x"`
+	Y       string `json:"y"`
+}
+
 // JWS header
 type Header struct {
 	Alg Algorithm `json:"alg"`
 	Typ string    `json:"typ,omitempty"`
 	Cty string    `json:"cty,omitempty"`
 	Jku string    `json:"jku,omitempty"`
-	Jwk string    `json:"jwk,omitempty"`
+	Jwk *Jwk      `json:"jwk,omitempty"`
 	X5u string    `json:"x5u,omitempty"`
 	X5t string    `json:"x5t,omitempty"`
 	X5c string    `json:"x5c,omitempty"`
@@ -172,12 +181,8 @@ func VerifyAndDecodeWithHeader(jws string, kp KeyProvider) (header Header, paylo
 	case ALG_RS256, ALG_RS384, ALG_RS512:
 		pubKey, ok := key.(*rsa.PublicKey)
 		if !ok {
-			privKey, ok := key.(*rsa.PrivateKey)
-			if !ok {
-				err = fmt.Errorf("Expected RSA key. Got %T", key)
-				return
-			}
-			pubKey = &privKey.PublicKey
+			err = fmt.Errorf("Expected RSA key. Got %T", key)
+			return
 		}
 
 		var htype crypto.Hash
@@ -209,13 +214,8 @@ func VerifyAndDecodeWithHeader(jws string, kp KeyProvider) (header Header, paylo
 	case ALG_ES256, ALG_ES384, ALG_ES512:
 		pubKey, ok := key.(*ecdsa.PublicKey)
 		if !ok {
-			privKey, ok := key.(*ecdsa.PrivateKey)
-			if !ok {
-				err = fmt.Errorf("Expected ECDSA key. Got %T", key)
-				return
-			}
-
-			pubKey = &privKey.PublicKey
+			err = fmt.Errorf("Expected ECDSA key. Got %T", key)
+			return
 		}
 
 		var hs hash.Hash
@@ -256,13 +256,8 @@ func VerifyAndDecodeWithHeader(jws string, kp KeyProvider) (header Header, paylo
 	case ALG_PS256, ALG_PS384, ALG_PS512:
 		pubKey, ok := key.(*rsa.PublicKey)
 		if !ok {
-			privKey, ok := key.(*rsa.PrivateKey)
-			if !ok {
-				err = fmt.Errorf("Expected RSA key. Got %T", key)
-				return
-			}
-
-			pubKey = &privKey.PublicKey
+			err = fmt.Errorf("Expected RSA key. Got %T", key)
+			return
 		}
 
 		var hs hash.Hash
