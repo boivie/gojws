@@ -25,9 +25,11 @@
 package gojws
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -302,5 +304,156 @@ func VerifyAndDecodeWithHeader(jws string, kp KeyProvider) (header Header, paylo
 
 func VerifyAndDecode(jws string, kp KeyProvider) (payload []byte, err error) {
 	_, payload, err = VerifyAndDecodeWithHeader(jws, kp)
+	return
+}
+
+func signBytes(alg Algorithm, header string, payload string, key interface{}) (signature []byte, err error) {
+	switch alg {
+	case ALG_HS256, ALG_HS384, ALG_HS512:
+		symmetricKey, ok := key.([]byte)
+		if !ok {
+			err = fmt.Errorf("Expected symmetric ([]byte) key. Got %T", key)
+			return
+		}
+
+		var hfunc func() hash.Hash
+		if alg == ALG_HS256 {
+			hfunc = sha256.New
+		} else if alg == ALG_HS384 {
+			hfunc = sha512.New384
+		} else if alg == ALG_HS512 {
+			hfunc = sha512.New
+		} else {
+			panic("Algorithm logic error with " + alg)
+		}
+
+		hm := hmac.New(hfunc, symmetricKey)
+		io.WriteString(hm, header)
+		io.WriteString(hm, ".")
+		io.WriteString(hm, payload)
+
+		signature = hm.Sum(nil)
+
+	case ALG_RS256, ALG_RS384, ALG_RS512:
+		privKey, ok := key.(*rsa.PrivateKey)
+		if !ok {
+			err = fmt.Errorf("Expected RSA key. Got %T", key)
+			return
+		}
+
+		var htype crypto.Hash
+		var hs hash.Hash
+		if alg == ALG_RS256 {
+			hs = sha256.New()
+			htype = crypto.SHA256
+		} else if alg == ALG_RS384 {
+			hs = sha512.New384()
+			htype = crypto.SHA384
+		} else if alg == ALG_RS512 {
+			hs = sha512.New()
+			htype = crypto.SHA512
+		} else {
+			panic("Algorithm logic error with " + alg)
+		}
+
+		// generate hashed input
+		io.WriteString(hs, header)
+		io.WriteString(hs, ".")
+		io.WriteString(hs, payload)
+
+		signature, err = rsa.SignPKCS1v15(rand.Reader, privKey, htype, hs.Sum(nil))
+
+	case ALG_ES256, ALG_ES384, ALG_ES512:
+		privKey, ok := key.(*ecdsa.PrivateKey)
+		if !ok {
+			err = fmt.Errorf("Expected ECDSA key. Got %T", key)
+			return
+		}
+
+		var hs hash.Hash
+		var rSize, sSize int
+		if alg == ALG_ES256 {
+			rSize, sSize = 32, 32
+			hs = sha256.New()
+		} else if alg == ALG_ES384 {
+			rSize, sSize = 48, 48
+			hs = sha512.New384()
+		} else if alg == ALG_ES512 {
+			rSize, sSize = 66, 66
+			hs = sha512.New()
+		} else {
+			panic("Alorithm logic error with " + alg)
+		}
+
+		// split signature into R and S
+		if len(signature) != rSize+sSize {
+			err = errors.New("Signature verification failed")
+			return
+		}
+
+		// generate hashed input
+		io.WriteString(hs, header)
+		io.WriteString(hs, ".")
+		io.WriteString(hs, payload)
+
+		r, s, err := ecdsa.Sign(rand.Reader, privKey, hs.Sum(nil))
+
+		if err == nil {
+			var buf bytes.Buffer
+			buf.Write(r.Bytes())
+			buf.Write(s.Bytes())
+			signature = buf.Bytes()
+		}
+
+	case ALG_PS256, ALG_PS384, ALG_PS512:
+		privKey, ok := key.(*rsa.PrivateKey)
+		if !ok {
+			err = fmt.Errorf("Expected RSA key. Got %T", key)
+			return
+		}
+
+		var hs hash.Hash
+		var htype crypto.Hash
+		if alg == ALG_PS256 {
+			hs = sha256.New()
+			htype = crypto.SHA256
+		} else if alg == ALG_PS384 {
+			hs = sha512.New384()
+			htype = crypto.SHA384
+		} else if alg == ALG_PS512 {
+			hs = sha512.New()
+			htype = crypto.SHA512
+		} else {
+			panic("Algorithm logic error with " + alg)
+		}
+
+		// generate hashed input
+		io.WriteString(hs, header)
+		io.WriteString(hs, ".")
+		io.WriteString(hs, payload)
+
+		signature, err = rsa.SignPSS(rand.Reader, privKey, htype, hs.Sum(nil), nil)
+	default:
+		err = fmt.Errorf("Unknown signature algorithm: %s", alg)
+		return
+	}
+	return
+}
+
+func Sign(header Header, payload []byte, priv interface{}) (message string, err error) {
+	headerBytes, err := json.Marshal(header)
+	if err != nil {
+		return
+	}
+	headerString := B64encode(headerBytes)
+	payloadString := B64encode(payload)
+
+	signature, err := signBytes(header.Alg, headerString, payloadString, priv)
+	if err != nil {
+		return
+	}
+	signatureString := B64encode(signature)
+
+	message = headerString + "." + payloadString + "." + signatureString
 	return
 }
