@@ -97,15 +97,16 @@ type Jwk struct {
 
 // JWS header
 type Header struct {
-	Alg Algorithm `json:"alg"`
-	Typ string    `json:"typ,omitempty"`
-	Cty string    `json:"cty,omitempty"`
-	Jku string    `json:"jku,omitempty"`
-	Jwk *Jwk      `json:"jwk,omitempty"`
-	X5u string    `json:"x5u,omitempty"`
-	X5t string    `json:"x5t,omitempty"`
-	X5c string    `json:"x5c,omitempty"`
-	Kid string    `json:"kid,omitempty"`
+	Alg    Algorithm `json:"alg"`
+	Typ    string    `json:"typ,omitempty"`
+	Cty    string    `json:"cty,omitempty"`
+	Jku    string    `json:"jku,omitempty"`
+	Jwk    *Jwk      `json:"jwk,omitempty"`
+	X5u    string    `json:"x5u,omitempty"`
+	X5t    string    `json:"x5t,omitempty"`
+	X5t256 string    `json:"x5t#S256,omitempty"`
+	X5c    string    `json:"x5c,omitempty"`
+	Kid    string    `json:"kid,omitempty"`
 }
 
 // Verify the authenticity of a JWS signature
